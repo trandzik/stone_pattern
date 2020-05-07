@@ -1,3 +1,3 @@
-# Non-uniform stone pattern generator
+# Non-uniform stone pattern generator HDA written in VEX
 ![](https://trandzik.com/assets/images/stones/pattern.jpg)
-This tool can be used to generate wall made of non-uniform stones (with different widths and also heights). VEX driven HDA builds pattern in a "natural way" by stacking stones of various sizes one onto another - filling both large and small gaps. For more information visit my [blog post](https://trandzik.com/houdini/stone-pattern/) or [odforce post](https://forums.odforce.net/topic/22175-brickstone-wall-broken-horizontals/?page=2&tab=comments#comment-161771).
+This tool can be used to generate wall made of non-uniform stones (with different widths and also heights). VEX algorithm builds pattern in a "natural way" by stacking stones of various sizes one onto another - filling both large and small gaps. For more information visit my [blog post](https://trandzik.com/houdini/stone-pattern/) or [odforce post](https://forums.odforce.net/topic/22175-brickstone-wall-broken-horizontals/?page=2&tab=comments#comment-161771).
