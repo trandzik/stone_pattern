@@ -1,0 +1,432 @@
+vector pos0[], pos1[], pos2[], pos3[];      //positions for box points 0-3
+int prim[];
+int w_num, h_num;       //number of stones along width(x), number of stones added along height(y)
+float height, width, x_sum, y_sum;
+float width_min, width_max, width_rnd_mult, width_rnd_offs, width_seed;     //randomization values for width
+float height_min, height_max, height_rnd_mult, height_rnd_offs, height_seed;     //randomization values for height
+vector main_pts[];      //array of points that define profile of topmost stones
+
+x_sum = 0;
+y_sum = 0;
+
+w_num = chi("w_num");
+h_num = chi("h_num");
+
+width_min = chf("width_min");
+width_max = chf("width_max");
+width_rnd_mult = chf("width_rnd_mult");
+width_rnd_offs = chf("width_rnd_offs");
+width_seed = chi("width_seed");
+
+height_min = chf("height_min");
+height_max = chf("height_max");
+height_rnd_mult = chf("height_rnd_mult");
+height_rnd_offs = chf("height_rnd_offs");
+height_seed = chi("height_seed");
+
+int precise_sizes = chi("precise_sizes");
+float precise_amount = 1 - chf("precise_amount");
+int x = chi("x");
+float xRand;
+int y = chi("y");
+float yRand;
+float width_segment = chf("width_segment");
+float height_segment = chf("height_segment");
+
+///////////////////////// create first pass of stones /////////////////////////
+
+for (int i = 0; i < w_num; i++)
+{
+    width = clamp(random((i+1) + width_seed) * width_rnd_mult + width_rnd_offs, width_min, width_max);        
+    height = clamp(random((i+1500) + height_seed) * height_rnd_mult + height_rnd_offs, height_min, height_max);
+    if (precise_sizes == 1 && random(i+1) > precise_amount)
+    {
+        xRand = ceil(random((i+1) + width_seed) * x);
+        yRand = ceil(random((i+1500) + height_seed) * y);
+
+        width = width_segment * xRand;
+        height = height_segment * yRand;
+    }
+
+
+    pos0[i] = set(x_sum, y_sum, 0);
+    pos1[i] = set(x_sum + width, y_sum, 0);
+    pos2[i] = set(x_sum + width, y_sum + height, 0);
+    pos3[i] = set(x_sum, y_sum + height, 0);
+
+    //adds position of 3.rd (last) vertex to main_pts array
+    main_pts[i] = pos3[i];
+    
+    x_sum = x_sum + width;
+    
+    addpoint(geoself(), pos0[i]);
+    addpoint(geoself(), pos1[i]);
+    addpoint(geoself(), pos2[i]);
+    addpoint(geoself(), pos3[i]);
+    
+    prim[i] = addprim(geoself(), "poly");
+    addvertex(geoself(), prim[i], i*4);
+    addvertex(geoself(), prim[i], i*4 + 1);
+    addvertex(geoself(), prim[i], i*4 + 2);
+    addvertex(geoself(), prim[i], i*4 + 3);
+}
+main_pts[w_num] = pos2[w_num-1];
+f@w_max_size = pos2[w_num-1].x;
+
+///////////////////////// function to find the lowest Y value in array /////////////////////////
+
+int lowest_value(vector array_pts[])
+{
+    int a_size = arraylength(array_pts);
+    vector temp_pos = array_pts[0];
+    int id = 0;
+
+    for (int k = 0; k < a_size - 1; k++){       //runs through whole array
+        if (array_pts[k].y < temp_pos.y) {
+            temp_pos = array_pts[k];
+            id = k;
+        }
+    }
+    return id;      //outputs array number that contains point with lowest y
+}
+
+///////////////////////// visualise cur_pos chosen from array /////////////////////////
+/*
+cur1_pos.y = cur1_pos.y + 0.1;
+cur0_pos.y = cur0_pos.y + 0.1;
+cur2_pos.y = cur2_pos.y + 0.1;
+cur1_pos.x = cur1_pos.x + 0.02;
+cur0_pos.x = cur0_pos.x + 0.02;
+cur2_pos.x = cur2_pos.x + 0.02;
+addpoint(geoself(), cur1_pos);
+addpoint(geoself(), cur0_pos);
+addpoint(geoself(), cur2_pos);
+*/
+///////////////////////////////////////////////////////////////////////////////////////
+
+vector cur0_pos, cur1_pos, cur2_pos;        //stores position of lowest point(1) and its neibourghs(0,2)
+int low_val;
+float w_dist, h_dist1, h_dist2, w_snap_dist, h_snap_dist;
+float snap_amount;
+int w_snap_divider, h_snap_divider, snap_seed;
+int w_state, h_state, special_case;
+
+//w_snap_divider = chi("w_snap_divider");
+//h_snap_divider = chi("h_snap_divider");
+w_snap_dist = chf("w_snap_dist");
+h_snap_dist = chf("h_snap_dist");
+
+snap_amount = chf("snap_amount");
+snap_seed = chi("snap_seed");
+
+width = chf("width");
+height = chf("height");
+
+
+for (int j = 0; j < h_num; j++)
+{ 
+    low_val = lowest_value(main_pts);
+    cur1_pos = main_pts[low_val];
+    cur0_pos = main_pts[low_val-1];
+    cur2_pos = main_pts[low_val+1];
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    int array_size = arraylength(main_pts);
+    //if lowest value from array is the first stone
+    if (low_val == 0)
+    {
+        special_case = 1;
+    }
+    //if lowest value from array is the last stone
+    else if (low_val == array_size - 2)
+    {
+        special_case = 2;
+    }
+    //if the lowest value is not on the border (therefore it is not a special case)
+    else
+    {
+        special_case = 0;
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    //width distance to next stone (cur2)
+    w_dist = abs(cur1_pos.x - cur2_pos.x);
+
+
+    //randomized length of width, it is clamped to make sure it does not intersect with next stone
+    //width = clamp(random(j * snap_seed) * w_dist + w_snap_dist, w_snap_dist, w_dist);
+    width = clamp(random((j+1) + snap_seed) * width_rnd_mult + w_snap_dist, w_snap_dist, w_dist);
+        if (precise_sizes == 1 && random(j+1) > precise_amount){
+                xRand = clamp(ceil(random((j+1) + snap_seed) * x), 0, w_dist);
+        width = clamp(width_segment * xRand, 0, w_dist);
+        }
+
+
+
+    //if random width is too close to cur2_pos, it snaps to it
+    if (abs(cur2_pos.x - (cur1_pos.x + width)) <= w_snap_dist){
+        width = w_dist;
+        w_state = 1;
+    }
+    //if it is not too close to cur2_pos then the length does not have to be snapped (and is kept randomized)
+    else{
+        w_state = 0;
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    //height distance to cur0
+    h_dist1 = abs(cur1_pos.y - cur0_pos.y);
+    //height distance to cur2
+    h_dist2 = abs(cur1_pos.y - cur2_pos.y);
+
+    //this controls the artificial amount of height snaps defined by user
+    if (random(j + 2000) > snap_amount)
+    {
+
+
+        //randomized length of height, it is clamped so user have enough flexibility in adjusting this randomization
+        height = clamp(random((j + 1000) * snap_seed) * height_rnd_mult + height_rnd_offs, height_min, height_max);
+                if (precise_sizes == 1 && random(j+250) > precise_amount){
+                        yRand = ceil(random((j + 1000) + snap_seed) * y);
+                height = height_segment * yRand;
+            }
+
+
+
+        //not a special case - stone can be snapped to both neibourghs
+        if (special_case == 0)
+        {
+            //if random height is too close to cur0 then it is snapped to it
+            if (abs(cur0_pos.y - (cur1_pos.y + height)) <= h_snap_dist){
+                height = h_dist1;
+                h_state = 1;
+            }
+
+            //or if random height is too close to cur2 then it is snapped to it
+            else if (abs(cur2_pos.y - (cur1_pos.y + height)) <= h_snap_dist){
+                height = h_dist2;
+                h_state = 2;
+            }
+
+            //if it is not too close to cur2 or cur0 then the length does not have to be snapped (and is kept randomized)
+            else{
+                h_state = 0;
+            }
+        }
+        //if we are on first stone it can only be snapped to cur2
+        else if (special_case == 1)
+        {
+            //or if random height is too close to cur2 then it is snapped to it
+            if (abs(cur2_pos.y - (cur1_pos.y + height)) <= h_snap_dist){
+                height = h_dist2;
+                h_state = 2;
+            }
+
+            //if it is not too close to cur2 or cur0 then the length does not have to be snapped (and is kept randomized)
+            else{
+                h_state = 0;
+            }
+        }
+        //if we are on last stone it can only be snapped to cur0
+        else if (special_case == 2)
+        {
+            //if random height is too close to cur0 then it is snapped to it
+            if (abs(cur0_pos.y - (cur1_pos.y + height)) <= h_snap_dist){
+                height = h_dist1;
+                h_state = 1;
+            }
+
+            //if it is not too close to cur2 or cur0 then the length does not have to be snapped (and is kept randomized)
+            else{
+                h_state = 0;
+            }
+        }
+
+    }
+    else
+    {
+        //not a special case - stone can be snapped to both neibourghs
+        if (special_case == 0)
+        {
+            //random decides whether it is artficially snapped to cur0 or cur2
+            if (random(j + 2500) > 0.5){
+                height = h_dist1;
+                h_state = 1;
+            }
+            else{
+                height = h_dist2;
+                h_state = 2;
+            }
+        }
+        //if we are on first stone it can only be snapped to cur2
+        else if (special_case == 1)
+        {
+            height = h_dist2;
+            h_state = 2;
+        }
+        //if we are on last stone it can only be snapped to cur0
+        else if (special_case == 2)
+        {
+            height = h_dist1;
+            h_state = 1;
+        }
+
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    //new positions for current "stone" are created
+    pos0[j] = cur1_pos;
+    pos1[j] = set(cur1_pos.x + width, cur1_pos.y, 0);
+    pos2[j] = set(cur1_pos.x + width, cur1_pos.y + height, 0);
+    pos3[j] = set(cur1_pos.x, cur1_pos.y + height, 0);
+
+    //new points for current "stone" are created
+    addpoint(geoself(), pos0[j]);
+    addpoint(geoself(), pos1[j]);
+    addpoint(geoself(), pos2[j]);
+    addpoint(geoself(), pos3[j]);
+
+    //new prim for current "stone" is created
+    prim[w_num*4 + j] = addprim(geoself(), "poly");
+    addvertex(geoself(), prim[w_num*4 + j], w_num*4 + j*4);
+    addvertex(geoself(), prim[w_num*4 + j], w_num*4 + j*4 + 1);
+    addvertex(geoself(), prim[w_num*4 + j], w_num*4 + j*4 + 2);
+    addvertex(geoself(), prim[w_num*4 + j], w_num*4 + j*4 + 3);
+    
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    i@a_array_size = array_size;
+    i@c_low_val = low_val;
+    f@low_val_y = main_pts[low_val].y;
+    i@d_special_case = special_case;
+    i@e_w_state = w_state;
+    i@f_h_state = h_state;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    if (special_case == 0 || special_case == 1)
+    {
+        //CASE 1 & 3
+        if (w_state == 0 && h_state != 1)
+        {
+            //original cur1 is replaced by 3.vertex of new polygon
+            //1.vertex of polygon is added to array
+            //array += 1
+            
+            main_pts[low_val] = pos3[j];
+            int a_length = arraylength(main_pts) + 1;
+            resize(main_pts, a_length);
+
+            
+            for (int l = a_length - 1; l > low_val; l--){
+                main_pts[l] = main_pts[l-1];
+            }
+            
+            main_pts[low_val + 1] = pos1[j];
+        }
+
+        //CASE 2
+        else if (w_state == 0 && h_state == 1)
+        {
+            //original cur1 is replaced by 1.vertex of new polygon
+            //array is the same
+            main_pts[low_val] = pos1[j];
+        }
+        
+        //CASE 4
+        else if (w_state == 1 && h_state == 0)
+        {
+            //original cur1 is now replaced by 3.vertex of new polygon
+            //array is the same
+            main_pts[low_val] = pos3[j];
+        }
+        
+        //CASE 5
+        else if (w_state == 1 && h_state == 1)
+        {
+            //original cur1 is removed from array because is now basically the same stone height as cur0
+            //array -= 1
+            int a_length = arraylength(main_pts);
+            for (int l = low_val; l < a_length; l++){
+                main_pts[l] = main_pts[l+1];
+            }
+
+            a_length = arraylength(main_pts) - 1;
+            resize(main_pts, a_length);
+        }
+        
+        //CASE 6
+        else if (w_state == 1 && h_state == 2)
+        {
+            //original cur1 is replaced by 3.vertex of new polygon
+            //original cur2 is removed from array because is now basically the same stone height as cur1
+            //array -= 1
+            main_pts[low_val] = pos3[j];
+
+            int a_length = arraylength(main_pts);
+            for (int l = low_val + 1; l < a_length; l++){
+                main_pts[l] = main_pts[l+1];
+            }
+
+            a_length = arraylength(main_pts) - 1;
+            resize(main_pts, a_length);
+        }
+    }
+    else
+    {
+        //CASE 1
+        if (w_state == 0 && h_state == 0)
+        {
+            //original cur1 is replaced by 3.vertex of new polygon
+            //1.vertex of polygon is added to array
+            //array += 1
+
+            main_pts[low_val] = pos3[j];
+            int a_length = arraylength(main_pts) + 1;
+            resize(main_pts, a_length);
+
+            
+            for (int l = a_length - 1; l > low_val; l--){
+                main_pts[l] = main_pts[l-1];
+            }
+            
+            main_pts[low_val + 1] = pos1[j];
+        }
+
+        //CASE 2
+        else if (w_state == 0 && h_state == 1)
+        {
+            //original cur1 is replaced by 1.vertex of new polygon
+            //array is the same
+            main_pts[low_val] = pos1[j];
+        }
+
+        //CASE 7
+        else if (w_state == 1 && h_state == 0)
+        {
+            //original cur1 is replaced by 3.vertex of new polygon
+                        //original cur2 is replaced by 1.vertex of new polygon
+            //array is the same
+
+            main_pts[low_val] = pos3[j];
+            main_pts[low_val + 1] = pos2[j];
+        }
+
+        //CASE 8
+        else if (w_state == 1 && h_state == 1)
+        {
+            //original cur1 is now replaced by 2.vertex of new polygon
+            //array -= 1
+            
+            main_pts[low_val] = pos2[j];
+            int a_length = arraylength(main_pts) - 1;
+            resize(main_pts, a_length);
+        }
+    }
+
+    i@b_new_length = arraylength(main_pts);
+}
